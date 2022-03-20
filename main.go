@@ -24,17 +24,21 @@ func main() {
 
 	g, _ := errgroup.WithContext(context.Background())
 	g.Go(func() error {
-		pc, err := net.ListenPacket("udp", ":1053")
+		lIP := os.Getenv("LISTEN_IP")
+		lH := fmt.Sprintf("%s:1053", lIP)
+		fmt.Printf("Listening on %s\n", lH)
+		pc, err := net.ListenPacket("udp", lH)
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer pc.Close()
 
-		fmt.Printf("Listening...\n")
 		for {
 			buf := make([]byte, 1024)
+			fmt.Printf("Blocking read of UDP socket...\n")
 			n, addr, err := pc.ReadFrom(buf)
 			if err != nil {
+				fmt.Printf("Found error during read: %s\n", err)
 				continue
 			}
 			fmt.Printf("Running serve...\n")
@@ -53,6 +57,11 @@ func main() {
 			fmt.Printf("Waiting %d seconds for ping...\n", wait)
 			time.Sleep(time.Duration(wait) * time.Second)
 
+			if tokenFound {
+				fmt.Printf("Token found during sleep, breaking\n")
+				break
+			}
+
 			fmt.Printf("Token not found\n")
 			host := fmt.Sprintf("%s:1053", os.Getenv("OTHER_PLAYER"))
 			udpAddr, err := net.ResolveUDPAddr("udp4", host)
@@ -65,7 +74,7 @@ func main() {
 				panic(err)
 			}
 
-			fmt.Printf("Sending token\n")
+			fmt.Printf("Sending token to %s\n", host)
 			if _, err = conn.Write([]byte("Hello world!")); err != nil {
 				panic(err)
 			}
