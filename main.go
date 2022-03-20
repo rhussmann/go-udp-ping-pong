@@ -22,27 +22,34 @@ func main() {
 		os.Exit(1)
 	}
 
+	lIP := os.Getenv("LISTEN_IP")
+	lH := fmt.Sprintf("%s:1053", lIP)
+	fmt.Printf("Listening on %s\n", lH)
+	pc, err := net.ListenPacket("udp", lH)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pc.Close()
+
+	host := fmt.Sprintf("%s:1053", os.Getenv("OTHER_PLAYER"))
+	udpAddr, err := net.ResolveUDPAddr("udp4", host)
+	if err != nil {
+		panic(err)
+	}
+
 	g, _ := errgroup.WithContext(context.Background())
 	g.Go(func() error {
-		lIP := os.Getenv("LISTEN_IP")
-		lH := fmt.Sprintf("%s:1053", lIP)
-		fmt.Printf("Listening on %s\n", lH)
-		pc, err := net.ListenPacket("udp", lH)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer pc.Close()
 
 		for {
 			buf := make([]byte, 1024)
 			fmt.Printf("Blocking read of UDP socket...\n")
-			n, addr, err := pc.ReadFrom(buf)
+			n, _, err := pc.ReadFrom(buf)
 			if err != nil {
 				fmt.Printf("Found error during read: %s\n", err)
 				continue
 			}
 			fmt.Printf("Running serve...\n")
-			go serve(pc, addr, buf[:n])
+			go serve(pc, udpAddr, buf[:n])
 			fmt.Printf("After go routine...\n")
 		}
 
@@ -63,22 +70,10 @@ func main() {
 			}
 
 			fmt.Printf("Token not found\n")
-			host := fmt.Sprintf("%s:1053", os.Getenv("OTHER_PLAYER"))
-			udpAddr, err := net.ResolveUDPAddr("udp4", host)
-			if err != nil {
-				panic(err)
-			}
-
-			conn, err := net.DialUDP("udp", nil, udpAddr)
-			if err != nil {
-				panic(err)
-			}
-
 			fmt.Printf("Sending token to %s\n", host)
-			if _, err = conn.Write([]byte("Hello world!")); err != nil {
+			if _, err = pc.WriteTo([]byte("Hello world!"), udpAddr); err != nil {
 				panic(err)
 			}
-			conn.Close()
 		}
 
 		fmt.Printf("Token found!\n")
